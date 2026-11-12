@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SFTP Client</title>
+    <link rel="stylesheet" href="/src/style.css" />
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body>
+    <!-- Login -->
+    <section id="login-view" class="card">
+      <h1>SFTP Client</h1>
+      <form id="login-form" autocomplete="off">
+        <div class="row">
+          <label class="grow">Host
+            <input id="host" required placeholder="server.example.com" />
+          </label>
+          <label class="port">Port
+            <input id="port" type="number" min="1" max="65535" value="22" required />
+          </label>
+        </div>
+        <label>Benutzer
+          <input id="username" required />
+        </label>
+
+        <fieldset class="auth-switch">
+          <label><input type="radio" name="auth" value="password" checked /> Passwort</label>
+          <label><input type="radio" name="auth" value="key" /> SSH-Key</label>
+        </fieldset>
+
+        <div id="auth-password">
+          <label>Passwort
+            <input id="password" type="password" />
+          </label>
+        </div>
+
+        <div id="auth-key" hidden>
+          <label>Private-Key-Datei
+            <div class="row">
+              <input id="key-path" class="grow" placeholder="~/.ssh/id_ed25519" />
+              <button type="button" id="pick-key">Durchsuchen…</button>
+            </div>
+          </label>
+          <label>Passphrase (optional)
+            <input id="passphrase" type="password" />
+          </label>
+        </div>
+
+        <button type="submit" id="connect-btn" class="primary">Verbinden</button>
+        <p id="login-error" class="error" hidden></p>
+      </form>
+
+      <div id="history" hidden>
+        <div class="history-head">
+          <b>Letzte Verbindungen</b>
+          <button type="button" id="history-clear" title="Gesamten Verlauf löschen">Verlauf löschen</button>
+        </div>
+        <ul id="history-list"></ul>
+        <p class="hint">Gespeichert werden nur Host, Port, Benutzer und Pfad der Schlüsseldatei – nie Passwörter oder Passphrasen.</p>
+      </div>
+    </section>
+
+    <!-- Browser -->
+    <section id="browser-view" hidden>
+      <header class="toolbar">
+        <span id="conn-label" class="conn-label"></span>
+        <button id="up-btn" title="Übergeordneter Ordner">⬆</button>
+        <form id="path-form" class="grow"><input id="path" spellcheck="false" /></form>
+        <button id="refresh-btn" title="Aktualisieren">⟳</button>
+        <button id="mkdir-btn">Neuer Ordner</button>
+        <button id="upload-btn" class="primary">Dateien hochladen</button>
+        <button id="upload-dir-btn" class="primary">Ordner hochladen</button>
+        <button id="log-btn" title="Protokoll ein-/ausblenden">Protokoll</button>
+        <button id="disconnect-btn">Trennen</button>
+      </header>
+
+      <div class="content">
+        <div class="table-wrap" id="drop-zone">
+          <table>
+            <thead>
+              <tr><th>Name</th><th class="num">Größe</th><th>Geändert</th><th>Rechte</th><th></th></tr>
+            </thead>
+            <tbody id="files"></tbody>
+          </table>
+          <div id="drop-overlay" hidden>Dateien und Ordner hier ablegen zum Hochladen</div>
+        </div>
+
+        <aside id="log-panel" hidden>
+          <div class="log-head">
+            <b>Protokoll</b>
+            <span class="grow"></span>
+            <button id="log-clear" title="Protokoll leeren">Leeren</button>
+            <button id="log-close" title="Schließen">✕</button>
+          </div>
+          <ol id="log-list"></ol>
+        </aside>
+      </div>
+
+      <footer class="statusbar">
+        <div class="status-line"><span id="status"></span></div>
+        <div id="transfer-line" class="transfer-line" hidden>
+          <progress id="progress" max="100" value="0"></progress>
+          <span id="transfer-details"></span>
+          <button id="cancel-btn" class="danger">Abbrechen</button>
+        </div>
+      </footer>
+    </section>
+
+    <!-- Right-click menu (replaces the WebView default menu, whose "Reload" returned to the login) -->
+    <div id="ctx-menu" role="menu" hidden></div>
+
+    <!-- Errors stay visible until dismissed -->
+    <div id="toasts" aria-live="assertive"></div>
+
+    <!-- Simple prompt dialog (window.prompt isn't available in Tauri) -->
+    <dialog id="prompt-dialog">
+      <form method="dialog">
+        <p id="prompt-text"></p>
+        <input id="prompt-input" spellcheck="false" />
+        <div class="row end">
+          <button type="button" id="prompt-cancel">Abbrechen</button>
+          <button value="ok" class="primary">OK</button>
+        </div>
+      </form>
+    </dialog>
+  </body>
+</html>

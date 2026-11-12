@@ -1,0 +1,199 @@
+:root {
+  --bg: #f4f5f7;
+  --panel: #ffffff;
+  --border: #d8dbe0;
+  --text: #1f2328;
+  --muted: #667085;
+  --accent: #2563eb;
+  --accent-hover: #1d4ed8;
+  --danger: #dc2626;
+  --row-hover: #eef3ff;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #17191c;
+    --panel: #212429;
+    --border: #353a42;
+    --text: #e6e8eb;
+    --muted: #9aa1ab;
+    --row-hover: #2a3140;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+/* The page itself never scrolls: login card is centered, the file list scrolls on its own. */
+body { overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
+[hidden] { display: none !important; }
+
+input, button {
+  font: inherit;
+  color: inherit;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+button { cursor: pointer; white-space: nowrap; }
+button:hover { border-color: var(--accent); }
+button:disabled { opacity: 0.6; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover { background: var(--accent-hover); }
+button.danger:hover { border-color: var(--danger); color: var(--danger); }
+
+.row { display: flex; gap: 8px; align-items: center; }
+.row.end { justify-content: flex-end; }
+.grow { flex: 1; }
+
+/* ---------- Login ---------- */
+.card {
+  width: 100%;
+  max-width: 420px;
+  max-height: 100vh;
+  overflow-y: auto; /* only if the window is smaller than the card */
+  margin: 0 auto;
+  padding: 28px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+.card h1 { margin: 0 0 20px; font-size: 22px; }
+#login-form { display: flex; flex-direction: column; gap: 14px; }
+#login-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+#login-form label input { color: var(--text); }
+#login-form .port { width: 90px; }
+.auth-switch { display: flex; gap: 20px; border: none; padding: 0; margin: 0; }
+.auth-switch label { flex-direction: row !important; align-items: center; gap: 6px !important; color: var(--text) !important; }
+#auth-password, #auth-key { display: flex; flex-direction: column; gap: 14px; }
+.error { color: var(--danger); white-space: pre-wrap; margin: 0; }
+
+/* ---------- Browser ---------- */
+#browser-view { display: flex; flex-direction: column; height: 100vh; }
+.toolbar {
+  display: flex; gap: 8px; align-items: center;
+  padding: 10px; background: var(--panel); border-bottom: 1px solid var(--border);
+}
+.toolbar #path { width: 100%; font-family: Consolas, monospace; }
+.conn-label { color: var(--muted); font-weight: 600; }
+
+.table-wrap { flex: 1; overflow: auto; position: relative; }
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  position: sticky; top: 0; text-align: left; font-weight: 600; color: var(--muted);
+  background: var(--bg); padding: 8px 12px; border-bottom: 1px solid var(--border);
+}
+td { padding: 6px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background-color: var(--row-hover); }
+td.name { cursor: default; user-select: none; }
+td.name .icon { display: inline-block; width: 22px; }
+tr.dir td.name { font-weight: 500; cursor: pointer; }
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.perm { font-family: Consolas, monospace; color: var(--muted); }
+td.actions { text-align: right; white-space: nowrap; }
+td.actions button { padding: 2px 8px; font-size: 12px; margin-left: 4px; }
+.empty { text-align: center; color: var(--muted); padding: 30px; }
+
+#drop-overlay {
+  position: absolute; inset: 10px; display: flex; align-items: center; justify-content: center;
+  border: 3px dashed var(--accent); border-radius: 12px; font-size: 18px;
+  background: color-mix(in srgb, var(--panel) 85%, transparent);
+}
+
+.statusbar {
+  display: flex; gap: 12px; align-items: center; min-height: 32px;
+  padding: 6px 12px; background: var(--panel); border-top: 1px solid var(--border); color: var(--muted);
+}
+.statusbar #status { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.statusbar #status.error { color: var(--danger); }
+.statusbar progress { width: 220px; }
+
+dialog {
+  border: 1px solid var(--border); border-radius: 10px; background: var(--panel);
+  color: var(--text); min-width: 360px;
+}
+dialog form { display: flex; flex-direction: column; gap: 12px; }
+dialog p { margin: 0; }
+
+/* ---------- Statusbar (two lines while transferring) ---------- */
+.statusbar { flex-direction: column; align-items: stretch; gap: 4px; }
+.status-line { display: flex; min-width: 0; }
+.transfer-line { display: flex; gap: 12px; align-items: center; }
+.transfer-line progress { width: 260px; }
+.transfer-line #transfer-details { flex: 1; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.transfer-line button { padding: 2px 10px; font-size: 12px; }
+
+/* ---------- Ghost row of a running upload ---------- */
+tr.ghost { --p: 0%; background: linear-gradient(to right, color-mix(in srgb, var(--accent) 22%, transparent) var(--p), transparent var(--p)); }
+tr.ghost td.name { font-style: italic; }
+tr.ghost td { color: var(--muted); }
+tr.ghost:hover { background: linear-gradient(to right, color-mix(in srgb, var(--accent) 22%, transparent) var(--p), var(--row-hover) var(--p)); }
+tr.selected { background: var(--row-hover); }
+
+/* ---------- Context menu ---------- */
+#ctx-menu {
+  position: fixed; z-index: 100; min-width: 190px; padding: 4px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+#ctx-menu button { display: block; width: 100%; text-align: left; border: none; background: transparent; padding: 6px 12px; }
+#ctx-menu button:hover { background: var(--row-hover); }
+#ctx-menu button.danger:hover { color: var(--danger); }
+#ctx-menu hr { border: none; border-top: 1px solid var(--border); margin: 4px 0; }
+
+/* ---------- Error toasts ---------- */
+#toasts { position: fixed; right: 16px; bottom: 80px; z-index: 200; display: flex; flex-direction: column; gap: 8px; max-width: 480px; }
+.toast {
+  display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--danger); border-left-width: 5px; border-radius: 8px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+.toast .msg { flex: 1; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
+.toast .msg b { display: block; color: var(--danger); margin-bottom: 2px; }
+.toast button { padding: 0 8px; }
+
+/* Stable column width so a growing "x MB / y GB (n %)" text doesn't make the table jump */
+th.num { min-width: 230px; }
+td.num { white-space: nowrap; }
+td.ghost-state { max-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* ---------- Content area with side panel ---------- */
+.content { flex: 1; display: flex; min-height: 0; }
+.content .table-wrap { min-width: 0; }
+td.perm.has-tip { cursor: help; }
+#log-btn.active { border-color: var(--accent); color: var(--accent); }
+
+#log-panel { width: 380px; min-width: 260px; display: flex; flex-direction: column; background: var(--panel); border-left: 1px solid var(--border); }
+.log-head { display: flex; gap: 8px; align-items: center; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.log-head button { padding: 2px 8px; font-size: 12px; }
+#log-list { flex: 1; margin: 0; padding: 0; list-style: none; overflow-y: auto; font-size: 12.5px; user-select: text; }
+#log-list li { display: flex; gap: 8px; padding: 4px 10px; border-bottom: 1px solid var(--border); }
+#log-list time { color: var(--muted); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+#log-list span { overflow-wrap: anywhere; }
+#log-list li.error { color: var(--danger); }
+
+/* ---------- Connection history ---------- */
+#history { margin-top: 22px; padding-top: 16px; border-top: 1px solid var(--border); }
+.history-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.history-head button { padding: 2px 8px; font-size: 12px; }
+#history-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#history-list li { display: flex; gap: 6px; }
+.history-item { flex: 1; min-width: 0; display: flex; justify-content: space-between; gap: 12px; text-align: left; }
+.history-item:hover { background: var(--row-hover); }
+.history-main { overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.history-meta { color: var(--muted); font-size: 12px; white-space: nowrap; align-self: center; }
+.history-remove { padding: 6px 9px; color: var(--muted); }
+.history-remove:hover { color: var(--danger); border-color: var(--danger); }
+#history .hint { margin: 10px 0 0; color: var(--muted); font-size: 12px; }
+
+/* ---------- Selection ---------- */
+#files tr { user-select: none; }
+tr.sel, tr.sel:hover { background-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+
+/* Download progress on the real row: an image layer, so it stays visible on top of the hover/selection color */
+tr.downloading { --p: 0%; background-image: linear-gradient(to right, color-mix(in srgb, var(--accent) 40%, transparent) var(--p), transparent var(--p)); }
