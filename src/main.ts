@@ -7,7 +7,12 @@ import { open, save, ask } from "@tauri-apps/plugin-dialog";
 // ---------- Types (mirror of the Rust structs) ----------
 type Auth =
   | { type: "password"; password: string }
-  | { type: "key"; keyPath: string; passphrase?: string };
+  | { type: "key"; keyPath: string; passphrase?: string }
+  | { type: "agent"; fingerprint?: string; socket?: string };
+
+interface AgentKey { fingerprint: string; comment: string; algorithm: string }
+interface AgentStatus { available: boolean; source: string }
+type AuthMode = "password" | "key" | "agent";
 
 interface ConnectInfo { home: string; fingerprint: string; newHostKey: boolean }
 interface Entry {
@@ -187,9 +192,13 @@ interface Profile {
   host: string;
   port: number;
   username: string;
-  auth: "password" | "key";
+  auth: AuthMode;
   /** Path of the key file (not its content). */
   keyPath: string;
+  /** Agent mode: fingerprint of the chosen key (no secret); empty/undefined = try all. */
+  agentFingerprint?: string;
+  /** Agent mode: explicit socket/pipe path (no secret). */
+  agentSocket?: string;
   lastUsed: number;
 }
 const HISTORY_KEY = "sftp-client:history";
@@ -201,7 +210,19 @@ const sameProfile = (a: Profile, b: Profile) => a.host === b.host && a.port === 
 function readHistory(): Profile[] {
   try {
     const list = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "null");
-    if (Array.isArray(list)) return list.filter((p) => p && typeof p.host === "string" && typeof p.username === "string");
+    if (Array.isArray(list)) {
+      return list
+        .filter((p) => p && typeof p.host === "string" && typeof p.username === "string")
+        // Older entries have no agent fields and only "password" | "key".
+        .map((p) => ({
+          ...p,
+          port: Number(p.port) || 22,
+          auth: p.auth === "key" || p.auth === "agent" ? p.auth : "password",
+          keyPath: typeof p.keyPath === "string" ? p.keyPath : "",
+          agentFingerprint: typeof p.agentFingerprint === "string" ? p.agentFingerprint : undefined,
+          agentSocket: typeof p.agentSocket === "string" ? p.agentSocket : undefined,
+        }));
+    }
     // One-time migration of the former single "last profile".
     const old = JSON.parse(localStorage.getItem(LEGACY_PROFILE_KEY) ?? "null");
     if (old?.host) return [{ host: old.host, port: Number(old.port) || 22, username: old.username ?? "", auth: old.auth === "key" ? "key" : "password", keyPath: old.keyPath ?? "", lastUsed: Date.now() }];
@@ -223,8 +244,12 @@ function applyProfile(p: Profile) {
   input("port").value = String(p.port);
   input("username").value = p.username;
   input("key-path").value = p.keyPath;
+  input("agent-socket").value = p.agentSocket ?? "";
+  agentWanted = p.agentFingerprint ?? "";
+  authTouched = true;
   const radio = document.querySelector<HTMLInputElement>(`input[name="auth"][value="${p.auth}"]`);
   if (radio) radio.checked = true;
+  agentLoaded = false; // other profile, maybe other agent: reload the list when the agent mode is shown
   updateAuthMode();
 }
 
@@ -245,12 +270,13 @@ function renderHistory() {
     main.textContent = `${p.username}@${p.host}`;
     const meta = document.createElement("span");
     meta.className = "history-meta";
-    meta.textContent = `Port ${p.port} · ${p.auth === "key" ? "SSH-Key" : "Passwort"}`;
+    meta.textContent = `Port ${p.port} · ${AUTH_LABEL[p.auth]}`;
     pick.append(main, meta);
     pick.addEventListener("click", () => {
       applyProfile(p);
-      // Continue where the secret is needed.
-      input(p.auth === "key" ? "passphrase" : "password").focus();
+      // Continue where the secret is needed (the agent asks for it itself).
+      if (p.auth === "agent") $("connect-btn").focus();
+      else input(p.auth === "key" ? "passphrase" : "password").focus();
     });
     const remove = document.createElement("button");
     remove.type = "button";
@@ -274,21 +300,102 @@ $("history-clear").addEventListener("click", () => {
 function loadProfile() {
   const last = readHistory()[0];
   if (last) applyProfile(last);
-  else updateAuthMode();
+  else {
+    updateAuthMode();
+    // No saved choice: preselect the agent when one is running.
+    invoke<AgentStatus>("agent_status", { socket: null })
+      .then((st) => {
+        if (st.available && !authTouched) selectAuthMode("agent");
+      })
+      .catch(() => {});
+  }
   renderHistory();
 }
 
-function authMode(): "password" | "key" {
-  return (document.querySelector<HTMLInputElement>('input[name="auth"]:checked')!.value as "password" | "key");
+const AUTH_LABEL: Record<AuthMode, string> = { agent: "SSH-Agent", key: "Schlüsseldatei", password: "Passwort" };
+/** Set once the user (or a saved profile) picked a mode, so the automatic preselection stays out of the way. */
+let authTouched = false;
+
+function authMode(): AuthMode {
+  return document.querySelector<HTMLInputElement>('input[name="auth"]:checked')!.value as AuthMode;
+}
+
+function selectAuthMode(mode: AuthMode) {
+  const radio = document.querySelector<HTMLInputElement>(`input[name="auth"][value="${mode}"]`);
+  if (radio) radio.checked = true;
+  updateAuthMode();
 }
 
 function updateAuthMode() {
   const mode = authMode();
   $("auth-password").hidden = mode !== "password";
   $("auth-key").hidden = mode !== "key";
+  $("auth-agent").hidden = mode !== "agent";
+  if (mode === "agent" && !agentLoaded) void refreshAgentKeys();
 }
 
-document.querySelectorAll('input[name="auth"]').forEach((r) => r.addEventListener("change", updateAuthMode));
+document.querySelectorAll('input[name="auth"]').forEach((r) =>
+  r.addEventListener("change", () => {
+    authTouched = true;
+    updateAuthMode();
+  }),
+);
+
+// ----- SSH agent key list -----
+/** Fingerprint to preselect once the list is loaded (from a saved profile or the current choice). */
+let agentWanted = "";
+let agentLoaded = false;
+let agentRequest = 0;
+
+const shortFingerprint = (fp: string) => (fp.length > 12 ? `${fp.slice(0, 11)}…` : fp);
+
+async function refreshAgentKeys() {
+  const select = $<HTMLSelectElement>("agent-key");
+  const hint = $("agent-hint");
+  const refreshBtn = $<HTMLButtonElement>("agent-refresh");
+  const wanted = agentWanted;
+  const request = ++agentRequest;
+  const socket = input("agent-socket").value.trim() || null;
+
+  refreshBtn.disabled = true;
+  hint.textContent = "Schlüssel werden vom Agenten geladen … (ggf. Freigabe in Bitwarden erteilen)";
+  hint.hidden = false;
+  try {
+    const keys = await invoke<AgentKey[]>("list_agent_keys", { socket });
+    if (request !== agentRequest) return;
+    select.replaceChildren(new Option("Automatisch (alle probieren)", ""));
+    for (const k of keys) {
+      select.append(new Option(`${k.comment || "(ohne Kommentar)"} (${shortFingerprint(k.fingerprint)})`, k.fingerprint));
+    }
+    // Keep a saved key selectable even if the agent doesn't list it right now (e.g. vault locked).
+    if (wanted && !keys.some((k) => k.fingerprint === wanted)) {
+      select.append(new Option(`Gespeicherter Schlüssel (${shortFingerprint(wanted)}) – nicht im Agenten`, wanted));
+    }
+    select.value = wanted;
+    agentLoaded = true;
+    hint.hidden = keys.length > 0;
+    if (keys.length === 0) {
+      hint.textContent = "Der SSH-Agent ist erreichbar, enthält aber keine Schlüssel. Tresor entsperren und einen SSH-Schlüssel anlegen.";
+    }
+  } catch (e) {
+    if (request !== agentRequest) return;
+    agentLoaded = false;
+    hint.textContent =
+      `${errorText(e)}\n\nBitwarden öffnen > Einstellungen > SSH-Agent aktivieren und den Tresor entsperren. ` +
+      "Die Anmeldung per Schlüsseldatei oder Passwort funktioniert weiterhin.";
+    hint.hidden = false;
+  } finally {
+    if (request === agentRequest) refreshBtn.disabled = false;
+  }
+}
+
+$("agent-refresh").addEventListener("click", () => void refreshAgentKeys());
+$("agent-key").addEventListener("change", () => (agentWanted = $<HTMLSelectElement>("agent-key").value));
+// A different socket means a different agent: reload the list.
+input("agent-socket").addEventListener("change", () => {
+  agentLoaded = false;
+  if (authMode() === "agent") void refreshAgentKeys();
+});
 
 $("pick-key").addEventListener("click", async () => {
   const file = await open({ title: "Private Key auswählen", multiple: false, directory: false });
@@ -305,17 +412,21 @@ $("login-form").addEventListener("submit", async (ev) => {
   const port = Number(input("port").value);
   const username = input("username").value.trim();
   const mode = authMode();
+  const agentFingerprint = $<HTMLSelectElement>("agent-key").value || undefined;
+  const agentSocket = input("agent-socket").value.trim() || undefined;
   const auth: Auth =
     mode === "password"
       ? { type: "password", password: input("password").value }
-      : { type: "key", keyPath: input("key-path").value || "~/.ssh/id_ed25519", passphrase: input("passphrase").value || undefined };
+      : mode === "agent"
+        ? { type: "agent", fingerprint: agentFingerprint, socket: agentSocket }
+        : { type: "key", keyPath: input("key-path").value || "~/.ssh/id_ed25519", passphrase: input("passphrase").value || undefined };
 
   btn.disabled = true;
-  btn.textContent = "Verbinde …";
+  btn.textContent = mode === "agent" ? "Warte auf SSH-Agent …" : "Verbinde …";
   try {
     const info = await invoke<ConnectInfo>("connect", { host, port, username, auth });
     // Never store passwords/passphrases – only connection details.
-    rememberProfile({ host, port, username, auth: mode, keyPath: input("key-path").value, lastUsed: Date.now() });
+    rememberProfile({ host, port, username, auth: mode, keyPath: input("key-path").value, agentFingerprint, agentSocket, lastUsed: Date.now() });
     input("password").value = "";
     input("passphrase").value = "";
 
