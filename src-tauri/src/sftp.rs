@@ -1,4 +1,4 @@
-//! SFTP backend: SSH connection (password or key), host key check (TOFU),
+//! SFTP backend: SSH connection (password, key or SSH agent), host key check (TOFU),
 //! and the SFTP operations exposed to the frontend as Tauri commands.
 
 use std::collections::HashMap;
@@ -19,6 +19,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWrite, AsyncWriteExt};
 use tokio::sync::Mutex;
+
+use crate::agent;
 
 type CmdResult<T> = Result<T, String>;
 
@@ -185,6 +187,13 @@ pub enum Auth {
         key_path: String,
         passphrase: Option<String>,
     },
+    /// Key held by an SSH agent (Bitwarden, OpenSSH, ssh-agent, Pageant). No secrets involved.
+    Agent {
+        /// `SHA256:...` of the wanted key; `None` = try the agent's keys one after another
+        fingerprint: Option<String>,
+        /// Explicit socket/pipe path; `None` = detect automatically
+        socket: Option<String>,
+    },
 }
 
 #[derive(Clone)]
@@ -283,6 +292,7 @@ async fn establish(
         Ok(Ok(handle)) => handle,
     };
 
+    let is_agent = matches!(auth, Auth::Agent { .. });
     let authenticated = match auth {
         Auth::Password { password } => {
             let ok = handle
@@ -307,9 +317,23 @@ async fn establish(
                 .map_err(err)?
                 .success()
         }
+        Auth::Agent { fingerprint, socket } => {
+            match agent::login(&mut handle, &username, fingerprint.as_deref(), socket.as_deref())
+                .await
+            {
+                Ok(ok) => ok,
+                Err(e) => {
+                    let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
+                    return Err(e);
+                }
+            }
+        }
     };
     if !authenticated {
         let _ = handle.disconnect(Disconnect::ByApplication, "", "en").await;
+        if is_agent {
+            return Err("SSH-Agent erreichbar, aber kein Schlüssel wurde akzeptiert".into());
+        }
         return Err("Anmeldung fehlgeschlagen (Benutzername, Passwort oder Schlüssel falsch)".into());
     }
 
@@ -334,6 +358,18 @@ async fn establish(
         fingerprint,
         new_host_key,
     })
+}
+
+/// Keys offered by the SSH agent (for the login dialog's key list).
+#[tauri::command]
+pub async fn list_agent_keys(socket: Option<String>) -> CmdResult<Vec<agent::AgentKey>> {
+    agent::list_keys(socket.as_deref()).await
+}
+
+/// Whether an SSH agent can be reached (used to preselect the agent login mode).
+#[tauri::command]
+pub async fn agent_status(socket: Option<String>) -> agent::AgentStatus {
+    agent::status(socket.as_deref()).await
 }
 
 async fn keyboard_interactive(

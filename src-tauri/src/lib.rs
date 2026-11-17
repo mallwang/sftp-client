@@ -1,3 +1,4 @@
+mod agent;
 mod sftp;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -10,6 +11,8 @@ pub fn run() {
             sftp::disconnect,
             sftp::reconnect,
             sftp::check_connection,
+            sftp::list_agent_keys,
+            sftp::agent_status,
             sftp::resolve_path,
             sftp::list_dir,
             sftp::download,

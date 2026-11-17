@@ -25,9 +25,28 @@
         </label>
 
         <fieldset class="auth-switch">
+          <label><input type="radio" name="auth" value="agent" /> SSH-Agent (z. B. Bitwarden)</label>
+          <label><input type="radio" name="auth" value="key" /> Schlüsseldatei</label>
           <label><input type="radio" name="auth" value="password" checked /> Passwort</label>
-          <label><input type="radio" name="auth" value="key" /> SSH-Key</label>
         </fieldset>
+
+        <div id="auth-agent" hidden>
+          <label>Schlüssel
+            <div class="row">
+              <select id="agent-key" class="grow">
+                <option value="">Automatisch (alle probieren)</option>
+              </select>
+              <button type="button" id="agent-refresh">Aktualisieren</button>
+            </div>
+          </label>
+          <p id="agent-hint" class="hint" hidden></p>
+          <details class="advanced">
+            <summary>Erweitert</summary>
+            <label>Socket/Pipe-Pfad (leer = automatisch erkennen)
+              <input id="agent-socket" spellcheck="false" placeholder="z. B. \\.\pipe\openssh-ssh-agent oder /run/user/1000/ssh-agent.sock" />
+            </label>
+          </details>
+        </div>
 
         <div id="auth-password">
           <label>Passwort
@@ -57,7 +76,7 @@
           <button type="button" id="history-clear" title="Gesamten Verlauf löschen">Verlauf löschen</button>
         </div>
         <ul id="history-list"></ul>
-        <p class="hint">Gespeichert werden nur Host, Port, Benutzer und Pfad der Schlüsseldatei – nie Passwörter oder Passphrasen.</p>
+        <p class="hint">Gespeichert werden nur Host, Port, Benutzer, Pfad der Schlüsseldatei bzw. Agent-Schlüssel (Fingerprint) – nie Passwörter oder Passphrasen.</p>
       </div>
     </section>
 

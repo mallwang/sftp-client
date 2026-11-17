@@ -31,7 +31,7 @@ html, body { margin: 0; height: 100%; }
 body { overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
 [hidden] { display: none !important; }
 
-input, button {
+input, button, select {
   font: inherit;
   color: inherit;
   background: var(--panel);
@@ -39,7 +39,7 @@ input, button {
   border-radius: 6px;
   padding: 6px 10px;
 }
-input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
 button { cursor: pointer; white-space: nowrap; }
 button:hover { border-color: var(--accent); }
 button:disabled { opacity: 0.6; cursor: default; }
@@ -68,9 +68,12 @@ button.danger:hover { border-color: var(--danger); color: var(--danger); }
 #login-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
 #login-form label input { color: var(--text); }
 #login-form .port { width: 90px; }
-.auth-switch { display: flex; gap: 20px; border: none; padding: 0; margin: 0; }
+.auth-switch { display: flex; flex-wrap: wrap; gap: 8px 16px; border: none; padding: 0; margin: 0; }
 .auth-switch label { flex-direction: row !important; align-items: center; gap: 6px !important; color: var(--text) !important; }
-#auth-password, #auth-key { display: flex; flex-direction: column; gap: 14px; }
+#auth-password, #auth-key, #auth-agent { display: flex; flex-direction: column; gap: 14px; }
+#auth-agent select { min-width: 0; text-overflow: ellipsis; }
+#auth-agent .hint { margin: 0; color: var(--muted); font-size: 12.5px; white-space: pre-wrap; }
+#auth-agent .advanced summary { cursor: pointer; color: var(--muted); margin-bottom: 8px; }
 .error { color: var(--danger); white-space: pre-wrap; margin: 0; }
 
 /* ---------- Browser ---------- */
