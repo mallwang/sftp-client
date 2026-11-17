@@ -121,5 +121,5 @@ src-tauri/capabilities/default.json      Berechtigungen (Dialog-Plugin)
 
 ## Bekannte Einschränkungen
 
-- Upload/Download nur für einzelne Dateien, keine ganzen Ordner
+- Bei Ordner-Up-/Downloads werden Symlinks übersprungen (nicht verfolgt)
 - Nur eine Verbindung gleichzeitig
